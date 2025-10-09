@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ActionItem extends Model
 {
@@ -38,6 +39,14 @@ class ActionItem extends Model
     public function message(): BelongsTo
     {
         return $this->belongsTo(Message::class);
+    }
+
+    /**
+     * Get the metadata for this action item.
+     */
+    public function metadata(): HasOne
+    {
+        return $this->hasOne(ActionItemMetadata::class);
     }
 
     /**

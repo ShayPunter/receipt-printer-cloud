@@ -103,15 +103,23 @@ class WebhookController extends Controller
                 $message->source
             );
 
-            // Store action items
+            // Store action items with metadata
             foreach ($actionItems as $item) {
-                $message->actionItems()->create([
+                $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
                     'sender' => $item['sender'] ?? null,
                     'synced' => false,
                 ]);
+
+                // Store metadata if provided
+                if (isset($item['reasoning']) || isset($item['confidence'])) {
+                    $actionItem->metadata()->create([
+                        'reasoning' => $item['reasoning'] ?? null,
+                        'confidence' => $item['confidence'] ?? null,
+                    ]);
+                }
             }
 
             // Mark message as processed
@@ -187,15 +195,23 @@ class WebhookController extends Controller
                 $message->source
             );
 
-            // Store action items
+            // Store action items with metadata
             foreach ($actionItems as $item) {
-                $message->actionItems()->create([
+                $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
                     'sender' => $item['sender'] ?? null,
                     'synced' => false,
                 ]);
+
+                // Store metadata if provided
+                if (isset($item['reasoning']) || isset($item['confidence'])) {
+                    $actionItem->metadata()->create([
+                        'reasoning' => $item['reasoning'] ?? null,
+                        'confidence' => $item['confidence'] ?? null,
+                    ]);
+                }
             }
 
             // Mark message as processed

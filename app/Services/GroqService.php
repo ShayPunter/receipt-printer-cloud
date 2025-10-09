@@ -21,8 +21,9 @@ class GroqService
      *
      * @param string $messageBody
      * @param string $source
-     * @return array Array of action items with priority levels and sender
-     *               Each item: ['action' => string, 'priority' => 'low'|'medium'|'high', 'sender' => string|null]
+     * @return array Array of action items with priority, sender, reasoning, and confidence
+     *               Each item: ['action' => string, 'priority' => string, 'sender' => string|null,
+     *                           'reasoning' => string|null, 'confidence' => float|null]
      */
     public function extractActionItems(string $messageBody, string $source): array
     {
@@ -44,7 +45,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. The array must contain objects with "action", "priority", and "sender" fields. Priority must be "low", "medium", or "high". Sender should be name or email from the message, or null if not found. Example: [{"action":"Task","priority":"high","sender":"Name"}]'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. Each object must have: "action" (string), "priority" ("low"/"medium"/"high"), "sender" (name/email or null), "reasoning" (why this is actionable), "confidence" (0.0-1.0 how confident you are). Example: [{"action":"Task","priority":"high","sender":"Name","reasoning":"Urgent deadline mentioned","confidence":0.95}]'
                     ],
                     [
                         'role' => 'user',
@@ -103,15 +104,28 @@ Message:
 
 IMPORTANT: Return ONLY the JSON array, no explanations or extra text.
 
-Format:
+Format (all fields required):
 [
-  {"action": "Complete the project report by Friday", "priority": "high", "sender": "Sarah Johnson"},
-  {"action": "Reply to John's email about the meeting", "priority": "medium", "sender": "John Smith"}
+  {
+    "action": "Complete the project report by Friday",
+    "priority": "high",
+    "sender": "Sarah Johnson",
+    "reasoning": "Explicit deadline mentioned with urgency",
+    "confidence": 0.95
+  },
+  {
+    "action": "Reply to John's email about the meeting",
+    "priority": "medium",
+    "sender": "John Smith",
+    "reasoning": "Request for response, no urgent deadline",
+    "confidence": 0.85
+  }
 ]
 
-Sender extraction:
-- Extract from "From:", sender name, or email address
-- Use null if sender cannot be determined
+Field requirements:
+- sender: Extract from "From:" or message, use null if unclear
+- reasoning: Explain WHY this is an action item (1-2 sentences)
+- confidence: 0.0-1.0 (how certain you are this is a real action item)
 
 Return empty array [] if no actionable items exist.
 PROMPT;
@@ -152,10 +166,17 @@ PROMPT;
                     $action = trim($item['action']);
                     $priority = strtolower($item['priority'] ?? 'medium');
                     $sender = isset($item['sender']) && !empty($item['sender']) ? trim($item['sender']) : null;
+                    $reasoning = isset($item['reasoning']) && !empty($item['reasoning']) ? trim($item['reasoning']) : null;
+                    $confidence = isset($item['confidence']) ? (float) $item['confidence'] : null;
 
                     // Validate priority
                     if (!in_array($priority, ['low', 'medium', 'high'])) {
                         $priority = 'medium';
+                    }
+
+                    // Validate confidence (0.0 to 1.0)
+                    if ($confidence !== null && ($confidence < 0.0 || $confidence > 1.0)) {
+                        $confidence = null;
                     }
 
                     if (!empty($action)) {
@@ -163,6 +184,8 @@ PROMPT;
                             'action' => $action,
                             'priority' => $priority,
                             'sender' => $sender,
+                            'reasoning' => $reasoning,
+                            'confidence' => $confidence,
                         ];
                     }
                 } elseif (is_string($item)) {
@@ -173,6 +196,8 @@ PROMPT;
                             'action' => $action,
                             'priority' => 'medium',
                             'sender' => null,
+                            'reasoning' => null,
+                            'confidence' => null,
                         ];
                     }
                 }
