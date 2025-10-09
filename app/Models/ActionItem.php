@@ -17,6 +17,7 @@ class ActionItem extends Model
         'source',
         'action',
         'priority',
+        'sender',
         'synced',
         'synced_at',
     ];

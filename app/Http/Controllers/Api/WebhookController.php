@@ -109,6 +109,7 @@ class WebhookController extends Controller
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
+                    'sender' => $item['sender'] ?? null,
                     'synced' => false,
                 ]);
             }
@@ -192,6 +193,7 @@ class WebhookController extends Controller
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
+                    'sender' => $item['sender'] ?? null,
                     'synced' => false,
                 ]);
             }

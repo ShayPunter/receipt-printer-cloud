@@ -45,6 +45,7 @@ class SyncController extends Controller
                     'id' => $item->id,
                     'action' => $item->action,
                     'priority' => $item->priority ?? 'medium',
+                    'sender' => $item->sender,
                     'source' => $item->source,
                     'message_id' => $item->message_id,
                     'message_body' => $item->message->body ?? null,

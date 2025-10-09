@@ -21,8 +21,8 @@ class GroqService
      *
      * @param string $messageBody
      * @param string $source
-     * @return array Array of action items with priority levels
-     *               Each item: ['action' => string, 'priority' => 'low'|'medium'|'high']
+     * @return array Array of action items with priority levels and sender
+     *               Each item: ['action' => string, 'priority' => 'low'|'medium'|'high', 'sender' => string|null]
      */
     public function extractActionItems(string $messageBody, string $source): array
     {
@@ -44,7 +44,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages with priority levels. Return ONLY a JSON array of objects with "action" and "priority" fields. Priority must be "low", "medium", or "high". If no actions are found, return an empty array [].'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages with priority levels and sender information. Return ONLY a JSON array of objects with "action", "priority", and "sender" fields. Priority must be "low", "medium", or "high". The sender should be the name or email of who sent the message (extracted from the message body). If sender cannot be determined, use null. If no actions are found, return an empty array [].'
                     ],
                     [
                         'role' => 'user',
@@ -101,12 +101,17 @@ Priority levels:
 Message:
 {$messageBody}
 
-Return a JSON array of objects with "action" and "priority" fields. Example format:
+Return a JSON array of objects with "action", "priority", and "sender" fields. Example format:
 [
-  {"action": "Complete the project report by Friday", "priority": "high"},
-  {"action": "Reply to John's email about the meeting", "priority": "medium"},
-  {"action": "Review the pull request when you have time", "priority": "low"}
+  {"action": "Complete the project report by Friday", "priority": "high", "sender": "Sarah Johnson"},
+  {"action": "Reply to John's email about the meeting", "priority": "medium", "sender": "John Smith"},
+  {"action": "Review the pull request when you have time", "priority": "low", "sender": "dev-team@company.com"}
 ]
+
+Extract the sender from:
+- Email: Look for "From:", sender name, or email address in the message
+- The person who made the request or sent the message
+- If unclear or no sender info, use null
 
 If there are no actionable items, return an empty array: []
 PROMPT;
@@ -140,6 +145,7 @@ PROMPT;
                 if (is_array($item) && isset($item['action'])) {
                     $action = trim($item['action']);
                     $priority = strtolower($item['priority'] ?? 'medium');
+                    $sender = isset($item['sender']) && !empty($item['sender']) ? trim($item['sender']) : null;
 
                     // Validate priority
                     if (!in_array($priority, ['low', 'medium', 'high'])) {
@@ -150,6 +156,7 @@ PROMPT;
                         $validItems[] = [
                             'action' => $action,
                             'priority' => $priority,
+                            'sender' => $sender,
                         ];
                     }
                 } elseif (is_string($item)) {
@@ -159,6 +166,7 @@ PROMPT;
                         $validItems[] = [
                             'action' => $action,
                             'priority' => 'medium',
+                            'sender' => null,
                         ];
                     }
                 }
