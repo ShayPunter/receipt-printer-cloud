@@ -44,7 +44,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages with priority levels and sender information. Return ONLY a JSON array of objects with "action", "priority", and "sender" fields. Priority must be "low", "medium", or "high". The sender should be the name or email of who sent the message (extracted from the message body). If sender cannot be determined, use null. If no actions are found, return an empty array [].'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. The array must contain objects with "action", "priority", and "sender" fields. Priority must be "low", "medium", or "high". Sender should be name or email from the message, or null if not found. Example: [{"action":"Task","priority":"high","sender":"Name"}]'
                     ],
                     [
                         'role' => 'user',
@@ -101,19 +101,19 @@ Priority levels:
 Message:
 {$messageBody}
 
-Return a JSON array of objects with "action", "priority", and "sender" fields. Example format:
+IMPORTANT: Return ONLY the JSON array, no explanations or extra text.
+
+Format:
 [
   {"action": "Complete the project report by Friday", "priority": "high", "sender": "Sarah Johnson"},
-  {"action": "Reply to John's email about the meeting", "priority": "medium", "sender": "John Smith"},
-  {"action": "Review the pull request when you have time", "priority": "low", "sender": "dev-team@company.com"}
+  {"action": "Reply to John's email about the meeting", "priority": "medium", "sender": "John Smith"}
 ]
 
-Extract the sender from:
-- Email: Look for "From:", sender name, or email address in the message
-- The person who made the request or sent the message
-- If unclear or no sender info, use null
+Sender extraction:
+- Extract from "From:", sender name, or email address
+- Use null if sender cannot be determined
 
-If there are no actionable items, return an empty array: []
+Return empty array [] if no actionable items exist.
 PROMPT;
     }
 
@@ -129,6 +129,12 @@ PROMPT;
         $content = preg_replace('/^```json?\s*/m', '', $content);
         $content = preg_replace('/\s*```$/m', '', $content);
         $content = trim($content);
+
+        // Extract JSON array from response (handle cases where AI adds explanatory text)
+        // Look for array pattern [ ... ] and extract it
+        if (preg_match('/\[(?:[^[\]]|(?R))*\]/s', $content, $matches)) {
+            $content = $matches[0];
+        }
 
         try {
             $items = json_decode($content, true, 512, JSON_THROW_ON_ERROR);
