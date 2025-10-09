@@ -87,10 +87,12 @@ class GroqService
 Analyze the following message from {$source} and extract actionable items.
 
 CRITICAL RULES:
-1. Only extract DISTINCT action items - do NOT create multiple items for the same task
-2. If multiple sentences describe the same problem/task, consolidate into ONE action item
-3. Ignore email signatures, disclaimers, and formatting text
-4. Only extract items that require a specific action from the recipient
+1. IGNORE newsletters, marketing emails, promotional content, and automated notifications
+2. IGNORE informational updates that don't require action (status reports, announcements, etc.)
+3. Only extract DISTINCT action items - do NOT create multiple items for the same task
+4. If multiple sentences describe the same problem/task, consolidate into ONE action item
+5. Ignore email signatures, disclaimers, and formatting text
+6. Only extract items that require a specific action from the recipient
 
 An actionable item is something that requires action:
 - Tasks to complete
@@ -99,6 +101,14 @@ An actionable item is something that requires action:
 - Meetings to attend
 - Decisions to make
 - Problems to fix
+
+NOT actionable (ignore these):
+- Newsletters and marketing emails
+- Automated notifications (e.g., "Your order has shipped")
+- General announcements without specific requests
+- Status updates that are purely informational
+- Promotional content and advertisements
+- Subscription confirmations and receipts
 
 Priority levels:
 - HIGH: Urgent, critical, system failures, explicit deadlines, requests from superiors
