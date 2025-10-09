@@ -9,7 +9,7 @@ class GroqService
 {
     private string $apiKey;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    private string $model = 'llama-4-scout-17bx16e-128k'; // Llama 4 Scout with 128k context
+    private string $model = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Llama 4 Scout with 128k context
 
     public function __construct()
     {
