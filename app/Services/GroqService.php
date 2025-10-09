@@ -88,11 +88,13 @@ Analyze the following message from {$source} and extract actionable items.
 
 CRITICAL RULES:
 1. IGNORE newsletters, marketing emails, promotional content, and automated notifications
-2. IGNORE informational updates that don't require action (status reports, announcements, etc.)
-3. Only extract DISTINCT action items - do NOT create multiple items for the same task
-4. If multiple sentences describe the same problem/task, consolidate into ONE action item
-5. Ignore email signatures, disclaimers, and formatting text
-6. Only extract items that require a specific action from the recipient
+2. IGNORE informational updates that don't require action (status reports, announcements, surveys, reports)
+3. IGNORE invitations to webinars, livestreams, events unless DIRECTLY requested by the recipient
+4. IGNORE general "FYI" content, industry updates, blog announcements, or content recommendations
+5. Only extract DISTINCT action items - do NOT create multiple items for the same task
+6. If multiple sentences describe the same problem/task, consolidate into ONE action item
+7. Ignore email signatures, disclaimers, and formatting text
+8. Only extract items that require a specific action from the RECIPIENT (not optional promotional activities)
 
 An actionable item is something that requires action:
 - Tasks to complete
@@ -103,12 +105,23 @@ An actionable item is something that requires action:
 - Problems to fix
 
 NOT actionable (ignore these):
-- Newsletters and marketing emails
+- Newsletters and marketing emails (even if they invite you to events/webinars)
+- Livestream announcements, webinar invitations, event promotions
+- Industry reports, surveys, or content recommendations
+- "Join us for..." or "Watch our..." promotional invitations
 - Automated notifications (e.g., "Your order has shipped")
 - General announcements without specific requests
 - Status updates that are purely informational
 - Promotional content and advertisements
 - Subscription confirmations and receipts
+- API updates, product announcements, or feature releases (unless you specifically requested them)
+
+Key indicators of NON-actionable content:
+- Contains phrases like "Join us", "Watch on YouTube", "Register now", "Download the report"
+- Talks about upcoming events, webinars, or livestreams as promotional content
+- Includes statistics, industry trends, or market research
+- Has a marketing/promotional tone rather than direct work requests
+- Contains incentives like "account credit", "early access", or promotional offers
 
 Priority levels:
 - HIGH: Urgent, critical, system failures, explicit deadlines, requests from superiors
