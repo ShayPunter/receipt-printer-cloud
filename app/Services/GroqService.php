@@ -84,18 +84,24 @@ class GroqService
     private function buildPrompt(string $messageBody, string $source): string
     {
         return <<<PROMPT
-Analyze the following message from {$source} and extract ALL actionable items with their priority levels.
+Analyze the following message from {$source} and extract actionable items.
 
-An actionable item is something that requires action, such as:
+CRITICAL RULES:
+1. Only extract DISTINCT action items - do NOT create multiple items for the same task
+2. If multiple sentences describe the same problem/task, consolidate into ONE action item
+3. Ignore email signatures, disclaimers, and formatting text
+4. Only extract items that require a specific action from the recipient
+
+An actionable item is something that requires action:
 - Tasks to complete
 - Items to review
 - Things to respond to
 - Meetings to attend
 - Decisions to make
-- Information to provide
+- Problems to fix
 
 Priority levels:
-- HIGH: Urgent, time-sensitive, critical, important deadlines, requests from superiors
+- HIGH: Urgent, critical, system failures, explicit deadlines, requests from superiors
 - MEDIUM: Normal priority, routine tasks, no immediate deadline
 - LOW: Optional, nice-to-have, informational, can be deferred
 
@@ -107,25 +113,20 @@ IMPORTANT: Return ONLY the JSON array, no explanations or extra text.
 Format (all fields required):
 [
   {
-    "action": "Complete the project report by Friday",
+    "action": "Fix the mail server issue on UAT environment",
     "priority": "high",
-    "sender": "Sarah Johnson",
-    "reasoning": "Explicit deadline mentioned with urgency",
+    "sender": "Jonathan Baker",
+    "reasoning": "Critical system failure requiring immediate fix",
     "confidence": 0.95
-  },
-  {
-    "action": "Reply to John's email about the meeting",
-    "priority": "medium",
-    "sender": "John Smith",
-    "reasoning": "Request for response, no urgent deadline",
-    "confidence": 0.85
   }
 ]
 
 Field requirements:
-- sender: Extract from "From:" or message, use null if unclear
-- reasoning: Explain WHY this is an action item (1-2 sentences)
-- confidence: 0.0-1.0 (how certain you are this is a real action item)
+- action: Clear, concise description. Combine related statements into ONE action.
+- priority: Based on urgency and impact
+- sender: Extract from "From:", signature, or email. Use null if unclear.
+- reasoning: Explain WHY this is actionable (1-2 sentences)
+- confidence: 0.0-1.0 (certainty this is a real, distinct action item)
 
 Return empty array [] if no actionable items exist.
 PROMPT;
