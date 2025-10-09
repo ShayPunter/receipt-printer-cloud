@@ -21,7 +21,8 @@ class GroqService
      *
      * @param string $messageBody
      * @param string $source
-     * @return array Array of action items (strings)
+     * @return array Array of action items with priority levels
+     *               Each item: ['action' => string, 'priority' => 'low'|'medium'|'high']
      */
     public function extractActionItems(string $messageBody, string $source): array
     {
@@ -43,7 +44,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a JSON array of action items, nothing else. Each item should be a clear, concise action. If no actions are found, return an empty array [].'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages with priority levels. Return ONLY a JSON array of objects with "action" and "priority" fields. Priority must be "low", "medium", or "high". If no actions are found, return an empty array [].'
                     ],
                     [
                         'role' => 'user',
@@ -82,7 +83,7 @@ class GroqService
     private function buildPrompt(string $messageBody, string $source): string
     {
         return <<<PROMPT
-Analyze the following message from {$source} and extract ALL actionable items.
+Analyze the following message from {$source} and extract ALL actionable items with their priority levels.
 
 An actionable item is something that requires action, such as:
 - Tasks to complete
@@ -92,18 +93,27 @@ An actionable item is something that requires action, such as:
 - Decisions to make
 - Information to provide
 
+Priority levels:
+- HIGH: Urgent, time-sensitive, critical, important deadlines, requests from superiors
+- MEDIUM: Normal priority, routine tasks, no immediate deadline
+- LOW: Optional, nice-to-have, informational, can be deferred
+
 Message:
 {$messageBody}
 
-Return a JSON array of clear, concise action items. Example format:
-["Complete the project report by Friday", "Reply to John's email about the meeting", "Review the pull request"]
+Return a JSON array of objects with "action" and "priority" fields. Example format:
+[
+  {"action": "Complete the project report by Friday", "priority": "high"},
+  {"action": "Reply to John's email about the meeting", "priority": "medium"},
+  {"action": "Review the pull request when you have time", "priority": "low"}
+]
 
 If there are no actionable items, return an empty array: []
 PROMPT;
     }
 
     /**
-     * Parse the AI response and extract action items.
+     * Parse the AI response and extract action items with priority.
      */
     private function parseActionItems(string $content): array
     {
@@ -123,10 +133,38 @@ PROMPT;
                 return [];
             }
 
-            // Filter out empty items and ensure strings
-            return array_values(array_filter(array_map(function ($item) {
-                return is_string($item) ? trim($item) : '';
-            }, $items)));
+            // Parse and validate each item
+            $validItems = [];
+            foreach ($items as $item) {
+                // Handle both new format (object) and legacy format (string)
+                if (is_array($item) && isset($item['action'])) {
+                    $action = trim($item['action']);
+                    $priority = strtolower($item['priority'] ?? 'medium');
+
+                    // Validate priority
+                    if (!in_array($priority, ['low', 'medium', 'high'])) {
+                        $priority = 'medium';
+                    }
+
+                    if (!empty($action)) {
+                        $validItems[] = [
+                            'action' => $action,
+                            'priority' => $priority,
+                        ];
+                    }
+                } elseif (is_string($item)) {
+                    // Legacy format support
+                    $action = trim($item);
+                    if (!empty($action)) {
+                        $validItems[] = [
+                            'action' => $action,
+                            'priority' => 'medium',
+                        ];
+                    }
+                }
+            }
+
+            return $validItems;
 
         } catch (\JsonException $e) {
             Log::error('Failed to parse Groq response as JSON', [

@@ -104,10 +104,11 @@ class WebhookController extends Controller
             );
 
             // Store action items
-            foreach ($actionItems as $action) {
+            foreach ($actionItems as $item) {
                 $message->actionItems()->create([
                     'source' => $message->source,
-                    'action' => $action,
+                    'action' => $item['action'],
+                    'priority' => $item['priority'],
                     'synced' => false,
                 ]);
             }
@@ -186,10 +187,11 @@ class WebhookController extends Controller
             );
 
             // Store action items
-            foreach ($actionItems as $action) {
+            foreach ($actionItems as $item) {
                 $message->actionItems()->create([
                     'source' => $message->source,
-                    'action' => $action,
+                    'action' => $item['action'],
+                    'priority' => $item['priority'],
                     'synced' => false,
                 ]);
             }

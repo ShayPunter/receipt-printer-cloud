@@ -16,6 +16,7 @@ class SyncController extends Controller
      * GET /api/sync
      * Optional query params:
      * - source: filter by source (e.g., ?source=gmail)
+     * - priority: filter by priority (e.g., ?priority=high)
      * - limit: limit number of results (default: 100)
      */
     public function index(Request $request): JsonResponse
@@ -28,6 +29,11 @@ class SyncController extends Controller
                 $query->fromSource($request->input('source'));
             }
 
+            // Filter by priority if provided
+            if ($request->has('priority')) {
+                $query->byPriority($request->input('priority'));
+            }
+
             // Limit results
             $limit = min((int) $request->input('limit', 100), 500);
             $actionItems = $query->orderBy('created_at', 'asc')
@@ -38,6 +44,7 @@ class SyncController extends Controller
                 return [
                     'id' => $item->id,
                     'action' => $item->action,
+                    'priority' => $item->priority ?? 'medium',
                     'source' => $item->source,
                     'message_id' => $item->message_id,
                     'message_body' => $item->message->body ?? null,
@@ -131,6 +138,17 @@ class SyncController extends Controller
                     ->map(function ($item) {
                         return [
                             'source' => $item->source,
+                            'total' => $item->count,
+                            'synced' => $item->synced_count,
+                            'unsynced' => $item->count - $item->synced_count,
+                        ];
+                    }),
+                'by_priority' => ActionItem::selectRaw('priority, COUNT(*) as count, SUM(CASE WHEN synced = 1 THEN 1 ELSE 0 END) as synced_count')
+                    ->groupBy('priority')
+                    ->get()
+                    ->map(function ($item) {
+                        return [
+                            'priority' => $item->priority,
                             'total' => $item->count,
                             'synced' => $item->synced_count,
                             'unsynced' => $item->count - $item->synced_count,

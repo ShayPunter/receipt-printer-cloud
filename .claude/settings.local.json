@@ -4,7 +4,10 @@
       "Bash(php artisan:*)",
       "Bash(git init:*)",
       "Bash(git remote add:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: Action Item Extractor API\n\nBuilt a Laravel application with the following features:\n- Webhook endpoints to receive data (source, body format)\n- Groq AI integration to extract actionable items from messages\n- Database tracking with messages and action_items tables\n- Sync endpoints for external apps to periodically fetch unsynced items\n- Optional API key authentication for security\n\nKey components:\n- Models: Message and ActionItem with Eloquent relationships\n- Services: GroqService for AI-powered action item extraction\n- Controllers: WebhookController and SyncController\n- Migrations: Database schema for messages and action items\n- API routes with optional authentication middleware\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd priority levels (low, medium, high) to action items\n\nFeatures added:\n- Database migration to add priority field with enum type\n- Updated ActionItem model with priority field and scopes\n- Enhanced GroqService to extract priority from AI analysis\n- Updated WebhookController to store priority with each action item\n- Enhanced SyncController to include priority in sync responses\n- Added priority filtering to sync endpoint (?priority=high)\n- Added priority statistics to sync stats endpoint\n\nAI now analyzes urgency based on:\n- HIGH: Urgent, time-sensitive, critical, important deadlines\n- MEDIUM: Normal priority, routine tasks (default)\n- LOW: Optional, nice-to-have, can be deferred\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

@@ -16,6 +16,7 @@ class ActionItem extends Model
         'message_id',
         'source',
         'action',
+        'priority',
         'synced',
         'synced_at',
     ];
@@ -60,6 +61,22 @@ class ActionItem extends Model
     public function scopeFromSource($query, string $source)
     {
         return $query->where('source', $source);
+    }
+
+    /**
+     * Scope a query to filter by priority.
+     */
+    public function scopeByPriority($query, string $priority)
+    {
+        return $query->where('priority', $priority);
+    }
+
+    /**
+     * Scope a query to filter by high priority.
+     */
+    public function scopeHighPriority($query)
+    {
+        return $query->where('priority', 'high');
     }
 
     /**
