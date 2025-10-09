@@ -33,7 +33,10 @@ class GroqService
         }
 
         try {
-            $prompt = $this->buildPrompt($messageBody, $source);
+            // Pre-filter URLs from message body to reduce noise and token usage
+            $cleanedBody = $this->stripUrls($messageBody);
+
+            $prompt = $this->buildPrompt($cleanedBody, $source);
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -76,6 +79,25 @@ class GroqService
             ]);
             return [];
         }
+    }
+
+    /**
+     * Strip URLs from message body to reduce noise and token usage.
+     * Removes http/https URLs including long tracking URLs.
+     */
+    private function stripUrls(string $messageBody): string
+    {
+        // Match http/https URLs including long tracking URLs with query parameters
+        $pattern = '/https?:\/\/[^\s\]]+/i';
+
+        // Replace URLs with empty string
+        $cleaned = preg_replace($pattern, '', $messageBody);
+
+        // Clean up multiple spaces and line breaks left by URL removal
+        $cleaned = preg_replace('/\s+/', ' ', $cleaned);
+        $cleaned = trim($cleaned);
+
+        return $cleaned;
     }
 
     /**
