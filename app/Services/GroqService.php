@@ -150,6 +150,30 @@ Priority levels:
 - MEDIUM: Normal priority, routine tasks, no immediate deadline
 - LOW: Optional, nice-to-have, informational, can be deferred
 
+EXTRACTING DETAILED, SPECIFIC ACTION ITEMS:
+Action descriptions must be DETAILED and SPECIFIC with enough context to understand the task without reading the full message.
+
+Include relevant details such as:
+- For errors: error type, environment, affected component, key error message
+- For requests: what specifically needs to be done, where, and any constraints
+- For meetings: topic, participants, or purpose if mentioned
+- For reviews: what needs reviewing and any specific aspects to focus on
+- For deadlines: the date/time if specified
+
+BAD Examples (too vague):
+❌ "Investigate and resolve the fatal error on the UAT environment"
+❌ "Fix the database issue"
+❌ "Update the documentation"
+❌ "Review the pull request"
+❌ "Follow up with the client"
+
+GOOD Examples (detailed and specific):
+✅ "Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings"
+✅ "Fix database connection timeout in production: MySQL pool exhausted during peak hours (12-2pm) affecting checkout flow"
+✅ "Update API documentation for /auth/login endpoint to include new 2FA flow and error codes 401/403"
+✅ "Review PR #847: Refactoring user authentication service - focus on session management changes"
+✅ "Follow up with Acme Corp client about delayed payment for Invoice #INV-2024-0523 ($15,000 overdue by 14 days)"
+
 Message:
 {$messageBody}
 
@@ -158,18 +182,18 @@ IMPORTANT: Return ONLY the JSON array, no explanations or extra text.
 Format (all fields required):
 [
   {
-    "action": "Fix the mail server issue on UAT environment",
+    "action": "Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings",
     "priority": "high",
-    "sender": "Jonathan Baker",
-    "reasoning": "Critical system failure requiring immediate fix",
+    "sender": "Sentry",
+    "reasoning": "Fatal authentication error blocking UAT admin functionality",
     "confidence": 0.95
   }
 ]
 
 Field requirements:
-- action: Clear, concise description. Combine related statements into ONE action.
-- priority: Based on urgency and impact
-- sender: Extract from "From:", signature, or email. Use null if unclear.
+- action: DETAILED, SPECIFIC description with relevant context. Extract key details from the message that make the task clear and actionable. Someone reading just this description should understand what needs to be done.
+- priority: Based on urgency and impact (fatal errors, deadlines = high priority)
+- sender: Extract from "From:", signature, email, or system name (e.g., "Sentry", "Jira"). Use null if unclear.
 - reasoning: Explain WHY this is actionable (1-2 sentences)
 - confidence: 0.0-1.0 (certainty this is a real, distinct action item)
 
