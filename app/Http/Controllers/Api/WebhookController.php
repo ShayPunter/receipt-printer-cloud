@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Services\GroqService;
+use App\Services\DeduplicationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\Validator;
 class WebhookController extends Controller
 {
     public function __construct(
-        private GroqService $groqService
+        private GroqService $groqService,
+        private DeduplicationService $deduplicationService
     ) {}
 
     /**
@@ -103,8 +105,38 @@ class WebhookController extends Controller
                 $message->source
             );
 
-            // Store action items with metadata
+            // Store action items with metadata and check for duplicates
+            $createdCount = 0;
+            $duplicateCount = 0;
+            $duplicateDetails = [];
+
             foreach ($actionItems as $item) {
+                // Check if this action item is a duplicate
+                $duplicationCheck = $this->deduplicationService->isDuplicate(
+                    $item['action'],
+                    $item['priority'],
+                    $item['sender'] ?? null
+                );
+
+                if ($duplicationCheck['is_duplicate']) {
+                    $duplicateCount++;
+                    $duplicateDetails[] = [
+                        'action' => $item['action'],
+                        'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
+                        'reasoning' => $duplicationCheck['reasoning']
+                    ];
+
+                    Log::info('Duplicate action item detected, skipping', [
+                        'message_id' => $message->id,
+                        'action' => $item['action'],
+                        'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
+                        'reasoning' => $duplicationCheck['reasoning']
+                    ]);
+
+                    continue; // Skip creating this duplicate action item
+                }
+
+                // Not a duplicate, create the action item
                 $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
@@ -120,6 +152,8 @@ class WebhookController extends Controller
                         'confidence' => $item['confidence'] ?? null,
                     ]);
                 }
+
+                $createdCount++;
             }
 
             // Mark message as processed
@@ -127,7 +161,9 @@ class WebhookController extends Controller
 
             Log::info('Message processed', [
                 'message_id' => $message->id,
-                'action_items_count' => count($actionItems)
+                'action_items_extracted' => count($actionItems),
+                'action_items_created' => $createdCount,
+                'duplicates_skipped' => $duplicateCount
             ]);
 
             return response()->json([
@@ -135,8 +171,10 @@ class WebhookController extends Controller
                 'message' => 'Message processed successfully',
                 'data' => [
                     'message_id' => $message->id,
-                    'action_items_count' => count($actionItems),
-                    'action_items' => $actionItems,
+                    'action_items_extracted' => count($actionItems),
+                    'action_items_created' => $createdCount,
+                    'duplicates_skipped' => $duplicateCount,
+                    'duplicate_details' => $duplicateDetails,
                 ]
             ]);
 
@@ -195,8 +233,38 @@ class WebhookController extends Controller
                 $message->source
             );
 
-            // Store action items with metadata
+            // Store action items with metadata and check for duplicates
+            $createdCount = 0;
+            $duplicateCount = 0;
+            $duplicateDetails = [];
+
             foreach ($actionItems as $item) {
+                // Check if this action item is a duplicate
+                $duplicationCheck = $this->deduplicationService->isDuplicate(
+                    $item['action'],
+                    $item['priority'],
+                    $item['sender'] ?? null
+                );
+
+                if ($duplicationCheck['is_duplicate']) {
+                    $duplicateCount++;
+                    $duplicateDetails[] = [
+                        'action' => $item['action'],
+                        'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
+                        'reasoning' => $duplicationCheck['reasoning']
+                    ];
+
+                    Log::info('Duplicate action item detected, skipping', [
+                        'message_id' => $message->id,
+                        'action' => $item['action'],
+                        'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
+                        'reasoning' => $duplicationCheck['reasoning']
+                    ]);
+
+                    continue; // Skip creating this duplicate action item
+                }
+
+                // Not a duplicate, create the action item
                 $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
@@ -212,6 +280,8 @@ class WebhookController extends Controller
                         'confidence' => $item['confidence'] ?? null,
                     ]);
                 }
+
+                $createdCount++;
             }
 
             // Mark message as processed
@@ -220,7 +290,9 @@ class WebhookController extends Controller
             Log::info('Webhook message received and processed', [
                 'message_id' => $message->id,
                 'source' => $message->source,
-                'action_items_count' => count($actionItems)
+                'action_items_extracted' => count($actionItems),
+                'action_items_created' => $createdCount,
+                'duplicates_skipped' => $duplicateCount
             ]);
 
             return response()->json([
@@ -229,8 +301,10 @@ class WebhookController extends Controller
                 'data' => [
                     'message_id' => $message->id,
                     'source' => $message->source,
-                    'action_items_count' => count($actionItems),
-                    'action_items' => $actionItems,
+                    'action_items_extracted' => count($actionItems),
+                    'action_items_created' => $createdCount,
+                    'duplicates_skipped' => $duplicateCount,
+                    'duplicate_details' => $duplicateDetails,
                 ]
             ], 201);
 
