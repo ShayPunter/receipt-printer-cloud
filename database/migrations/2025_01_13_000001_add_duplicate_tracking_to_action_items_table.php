@@ -15,12 +15,20 @@ return new class extends Migration
         // Check if columns already exist and drop them first
         if (Schema::hasColumn('action_items', 'is_duplicate')) {
             Schema::table('action_items', function (Blueprint $table) {
-                // Drop foreign key if it exists
-                try {
+                // Check if foreign key exists before dropping
+                $foreignKeys = DB::select(
+                    "SELECT CONSTRAINT_NAME
+                     FROM information_schema.TABLE_CONSTRAINTS
+                     WHERE TABLE_SCHEMA = DATABASE()
+                     AND TABLE_NAME = 'action_items'
+                     AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+                     AND CONSTRAINT_NAME = 'action_items_duplicate_of_id_foreign'"
+                );
+
+                if (count($foreignKeys) > 0) {
                     $table->dropForeign(['duplicate_of_id']);
-                } catch (\Exception $e) {
-                    // Foreign key might not exist, continue
                 }
+
                 $table->dropColumn(['is_duplicate', 'duplicate_of_id', 'duplicate_reasoning']);
             });
         }
