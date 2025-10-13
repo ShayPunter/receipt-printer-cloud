@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('action_items', function (Blueprint $table) {
             $table->boolean('is_duplicate')->default(false)->after('synced');
-            $table->uuid('duplicate_of_id')->nullable()->after('is_duplicate');
+            $table->unsignedBigInteger('duplicate_of_id')->nullable()->after('is_duplicate');
             $table->text('duplicate_reasoning')->nullable()->after('duplicate_of_id');
 
             // Add foreign key constraint
