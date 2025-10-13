@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,6 +12,20 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Check if columns already exist and drop them first
+        if (Schema::hasColumn('action_items', 'is_duplicate')) {
+            Schema::table('action_items', function (Blueprint $table) {
+                // Drop foreign key if it exists
+                try {
+                    $table->dropForeign(['duplicate_of_id']);
+                } catch (\Exception $e) {
+                    // Foreign key might not exist, continue
+                }
+                $table->dropColumn(['is_duplicate', 'duplicate_of_id', 'duplicate_reasoning']);
+            });
+        }
+
+        // Now add the columns fresh
         Schema::table('action_items', function (Blueprint $table) {
             $table->boolean('is_duplicate')->default(false)->after('synced');
             $table->unsignedBigInteger('duplicate_of_id')->nullable()->after('is_duplicate');
