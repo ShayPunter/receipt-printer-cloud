@@ -40,6 +40,7 @@ return [
 
     'groq' => [
         'api_key' => env('GROQ_API_KEY'),
+        'user_job_context' => env('USER_JOB_CONTEXT', null),
     ],
 
 ];

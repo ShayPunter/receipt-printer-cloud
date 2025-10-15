@@ -148,10 +148,11 @@ class WebhookController extends Controller
                 ]);
 
                 // Store metadata if provided
-                if (isset($item['reasoning']) || isset($item['confidence'])) {
+                if (isset($item['reasoning']) || isset($item['confidence']) || isset($item['relevance_score'])) {
                     $actionItem->metadata()->create([
                         'reasoning' => $item['reasoning'] ?? null,
                         'confidence' => $item['confidence'] ?? null,
+                        'relevance_score' => $item['relevance_score'] ?? null,
                     ]);
                 }
 
@@ -276,10 +277,11 @@ class WebhookController extends Controller
                 ]);
 
                 // Store metadata if provided
-                if (isset($item['reasoning']) || isset($item['confidence'])) {
+                if (isset($item['reasoning']) || isset($item['confidence']) || isset($item['relevance_score'])) {
                     $actionItem->metadata()->create([
                         'reasoning' => $item['reasoning'] ?? null,
                         'confidence' => $item['confidence'] ?? null,
+                        'relevance_score' => $item['relevance_score'] ?? null,
                     ]);
                 }
 
@@ -400,10 +402,11 @@ class WebhookController extends Controller
                         'synced' => false,
                     ]);
 
-                    if (isset($item['reasoning']) || isset($item['confidence'])) {
+                    if (isset($item['reasoning']) || isset($item['confidence']) || isset($item['relevance_score'])) {
                         $actionItem->metadata()->create([
                             'reasoning' => $item['reasoning'] ?? null,
                             'confidence' => $item['confidence'] ?? null,
+                            'relevance_score' => $item['relevance_score'] ?? null,
                         ]);
                     }
 

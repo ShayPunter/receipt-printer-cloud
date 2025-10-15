@@ -16,6 +16,7 @@ class ActionItemMetadata extends Model
         'action_item_id',
         'reasoning',
         'confidence',
+        'relevance_score',
     ];
 
     /**
@@ -25,6 +26,7 @@ class ActionItemMetadata extends Model
      */
     protected $casts = [
         'confidence' => 'float',
+        'relevance_score' => 'float',
     ];
 
     /**
@@ -57,5 +59,29 @@ class ActionItemMetadata extends Model
     public function scopeLowConfidence($query)
     {
         return $query->where('confidence', '<', 0.6);
+    }
+
+    /**
+     * Scope a query to filter by minimum relevance level.
+     */
+    public function scopeMinRelevance($query, float $relevance)
+    {
+        return $query->where('relevance_score', '>=', $relevance);
+    }
+
+    /**
+     * Scope a query to filter by high relevance (>= 0.7).
+     */
+    public function scopeHighRelevance($query)
+    {
+        return $query->where('relevance_score', '>=', 0.7);
+    }
+
+    /**
+     * Scope a query to filter by low relevance (< 0.4).
+     */
+    public function scopeLowRelevance($query)
+    {
+        return $query->where('relevance_score', '<', 0.4);
     }
 }

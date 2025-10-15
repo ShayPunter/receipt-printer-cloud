@@ -8,12 +8,14 @@ use Illuminate\Support\Facades\Log;
 class GroqService
 {
     private string $apiKey;
+    private ?string $userJobContext;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     private string $model = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Llama 4 Scout with 128k context
 
     public function __construct()
     {
         $this->apiKey = config('services.groq.api_key');
+        $this->userJobContext = config('services.groq.user_job_context');
     }
 
     /**
@@ -21,9 +23,9 @@ class GroqService
      *
      * @param string $messageBody
      * @param string $source
-     * @return array Array of action items with priority, sender, reasoning, and confidence
+     * @return array Array of action items with priority, sender, reasoning, confidence, and relevance_score
      *               Each item: ['action' => string, 'priority' => string, 'sender' => string|null,
-     *                           'reasoning' => string|null, 'confidence' => float|null]
+     *                           'reasoning' => string|null, 'confidence' => float|null, 'relevance_score' => float|null]
      */
     public function extractActionItems(string $messageBody, string $source): array
     {
@@ -48,7 +50,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. Each object must have: "action" (string), "priority" ("low"/"medium"/"high"), "sender" (name/email or null), "reasoning" (why this is actionable), "confidence" (0.0-1.0 how confident you are). Example: [{"action":"Task","priority":"high","sender":"Name","reasoning":"Urgent deadline mentioned","confidence":0.95}]'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. Each object must have: "action" (string), "priority" ("low"/"medium"/"high"), "sender" (name/email or null), "reasoning" (why this is actionable), "confidence" (0.0-1.0 how confident you are), "relevance_score" (0.0-1.0 how relevant to user\'s job). Example: [{"action":"Task","priority":"high","sender":"Name","reasoning":"Urgent deadline mentioned","confidence":0.95,"relevance_score":0.90}]'
                     ],
                     [
                         'role' => 'user',
@@ -105,8 +107,33 @@ class GroqService
      */
     private function buildPrompt(string $messageBody, string $source): string
     {
+        $relevanceSection = '';
+
+        if ($this->userJobContext) {
+            $relevanceSection = "
+
+USER JOB CONTEXT:
+{$this->userJobContext}
+
+RELEVANCE SCORING:
+Evaluate how relevant each action item is to the user's job responsibilities (0.0-1.0):
+- 1.0: Directly related to core responsibilities (architecture, team management, deployment, monitoring, QA)
+- 0.7-0.9: Related to technical areas they oversee or should be aware of
+- 0.4-0.6: Tangentially related or could impact their work indirectly
+- 0.0-0.3: Not directly relevant to their role (marketing, sales, other teams' work)
+
+Consider:
+- Is this within their area of responsibility?
+- Does it require their decision-making or input?
+- Does it impact systems/teams they manage?
+- Is this something they should delegate vs. handle personally?
+- If it something that they should delegate, print a ticket with delegation word on it.
+";
+        }
+
         return <<<PROMPT
 Analyze the following message from {$source} and extract actionable items.
+{$relevanceSection}
 
 CRITICAL RULES:
 1. IGNORE newsletters, marketing emails, promotional content, and automated notifications
@@ -186,7 +213,8 @@ Format (all fields required):
     "priority": "high",
     "sender": "Sentry",
     "reasoning": "Fatal authentication error blocking UAT admin functionality",
-    "confidence": 0.95
+    "confidence": 0.95,
+    "relevance_score": 0.95
   }
 ]
 
@@ -196,6 +224,7 @@ Field requirements:
 - sender: Extract from "From:", signature, email, or system name (e.g., "Sentry", "Jira"). Use null if unclear.
 - reasoning: Explain WHY this is actionable (1-2 sentences)
 - confidence: 0.0-1.0 (certainty this is a real, distinct action item)
+- relevance_score: 0.0-1.0 (how relevant to user's job responsibilities). Set to 1.0 if no job context provided.
 
 Return empty array [] if no actionable items exist.
 PROMPT;
@@ -238,6 +267,7 @@ PROMPT;
                     $sender = isset($item['sender']) && !empty($item['sender']) ? trim($item['sender']) : null;
                     $reasoning = isset($item['reasoning']) && !empty($item['reasoning']) ? trim($item['reasoning']) : null;
                     $confidence = isset($item['confidence']) ? (float) $item['confidence'] : null;
+                    $relevanceScore = isset($item['relevance_score']) ? (float) $item['relevance_score'] : null;
 
                     // Validate priority
                     if (!in_array($priority, ['low', 'medium', 'high'])) {
@@ -249,6 +279,11 @@ PROMPT;
                         $confidence = null;
                     }
 
+                    // Validate relevance_score (0.0 to 1.0)
+                    if ($relevanceScore !== null && ($relevanceScore < 0.0 || $relevanceScore > 1.0)) {
+                        $relevanceScore = null;
+                    }
+
                     if (!empty($action)) {
                         $validItems[] = [
                             'action' => $action,
@@ -256,6 +291,7 @@ PROMPT;
                             'sender' => $sender,
                             'reasoning' => $reasoning,
                             'confidence' => $confidence,
+                            'relevance_score' => $relevanceScore,
                         ];
                     }
                 } elseif (is_string($item)) {
@@ -268,6 +304,7 @@ PROMPT;
                             'sender' => null,
                             'reasoning' => null,
                             'confidence' => null,
+                            'relevance_score' => null,
                         ];
                     }
                 }
