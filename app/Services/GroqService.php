@@ -10,7 +10,7 @@ class GroqService
     private string $apiKey;
     private ?string $userJobContext;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    private string $model = 'meta-llama/llama-4-scout-17b-16e-instruct'; // Llama 4 Scout with 128k context
+    private string $model = 'openai/gpt-oss-120b'; // GPT-OSS 120B with prompt caching support
 
     public function __construct()
     {
@@ -71,6 +71,20 @@ class GroqService
 
             $result = $response->json();
             $content = $result['choices'][0]['message']['content'] ?? '';
+
+            // Log prompt caching metrics if available
+            if (isset($result['usage']['prompt_tokens_details']['cached_tokens'])) {
+                $totalPromptTokens = $result['usage']['prompt_tokens'] ?? 0;
+                $cachedTokens = $result['usage']['prompt_tokens_details']['cached_tokens'] ?? 0;
+                $cacheHitRate = $totalPromptTokens > 0 ? ($cachedTokens / $totalPromptTokens * 100) : 0;
+
+                Log::info('Groq prompt caching stats', [
+                    'total_prompt_tokens' => $totalPromptTokens,
+                    'cached_tokens' => $cachedTokens,
+                    'cache_hit_rate' => round($cacheHitRate, 2) . '%',
+                    'model' => $this->model,
+                ]);
+            }
 
             return $this->parseActionItems($content);
 
