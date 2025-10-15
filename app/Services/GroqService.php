@@ -134,12 +134,13 @@ class GroqService
      */
     private function buildPrompt(string $messageBody, string $source): string
     {
-        $userContextSection = '';
+        // Build all static sections first for optimal caching
+        $staticPrompt = "You are analyzing messages to extract actionable items for the recipient.
+
+";
 
         if ($this->userName) {
-            $userContextSection = "
-
-USER IDENTITY:
+            $staticPrompt .= "USER IDENTITY:
 The recipient of these action items is: {$this->userName}
 
 CRITICAL: Messages FROM {$this->userName} are CONTEXT, not action items for them:
@@ -157,15 +158,12 @@ Examples:
   \"Alice: Shay, can you review this PR?\" (Someone asking Shay)
   \"Bob: @Shay Punter please fix the auth issue\" (Directed at Shay)
   \"System: Assigned to Shay Punter\" (Task assigned to Shay)
+
 ";
         }
 
-        $relevanceSection = '';
-
         if ($this->userJobContext) {
-            $relevanceSection = "
-
-USER JOB CONTEXT:
+            $staticPrompt .= "USER JOB CONTEXT:
 {$this->userJobContext}
 
 RELEVANCE SCORING:
@@ -181,19 +179,15 @@ Consider:
 - Does it impact systems/teams they manage?
 - Is this something they should delegate vs. handle personally?
 - If it something that they should delegate, print a ticket with delegation word on it.
+
 ";
         }
 
-        return <<<PROMPT
-Analyze the following message from {$source} and extract actionable items.
-{$userContextSection}
-{$relevanceSection}
-
-CRITICAL RULES:
+        $staticPrompt .= "CRITICAL RULES:
 1. IGNORE newsletters, marketing emails, promotional content, and automated notifications
 2. IGNORE informational updates that don't require action (status reports, announcements, surveys, reports)
 3. IGNORE invitations to webinars, livestreams, events unless DIRECTLY requested by the recipient
-4. IGNORE general "FYI" content, industry updates, blog announcements, or content recommendations
+4. IGNORE general \"FYI\" content, industry updates, blog announcements, or content recommendations
 5. Only extract DISTINCT action items - do NOT create multiple items for the same task
 6. If multiple sentences describe the same problem/task, consolidate into ONE action item
 7. Ignore email signatures, disclaimers, and formatting text
@@ -211,8 +205,8 @@ NOT actionable (ignore these):
 - Newsletters and marketing emails (even if they invite you to events/webinars)
 - Livestream announcements, webinar invitations, event promotions
 - Industry reports, surveys, or content recommendations
-- "Join us for..." or "Watch our..." promotional invitations
-- Automated notifications (e.g., "Your order has shipped")
+- \"Join us for...\" or \"Watch our...\" promotional invitations
+- Automated notifications (e.g., \"Your order has shipped\")
 - General announcements without specific requests
 - Status updates that are purely informational
 - Promotional content and advertisements
@@ -220,15 +214,15 @@ NOT actionable (ignore these):
 - API updates, product announcements, or feature releases (unless you specifically requested them)
 
 Key indicators of NON-actionable content:
-- Contains phrases like "Join us", "Watch on YouTube", "Register now", "Download the report"
+- Contains phrases like \"Join us\", \"Watch on YouTube\", \"Register now\", \"Download the report\"
 - Talks about upcoming events, webinars, or livestreams as promotional content
 - Includes statistics, industry trends, or market research
 - Has a marketing/promotional tone rather than direct work requests
-- Contains incentives like "account credit", "early access", or promotional offers
+- Contains incentives like \"account credit\", \"early access\", or promotional offers
 
 Environment Detection:
 Extract the environment from the message (production, uat, staging, development, or null if unclear).
-Look for keywords like: "production", "prod", "live", "UAT", "user acceptance", "staging", "dev".
+Look for keywords like: \"production\", \"prod\", \"live\", \"UAT\", \"user acceptance\", \"staging\", \"dev\".
 For Sentry alerts, check the environment tag or URL.
 
 Priority levels:
@@ -247,8 +241,8 @@ Priority levels:
 SPECIAL RULES:
 1. PRODUCTION: Any production issue is automatically HIGH priority
 2. UAT: Default to MEDIUM unless:
-   - Contains "regression" or "regressed" → HIGH
-   - Contains "urgent", "ASAP", "critical", "immediately" → HIGH
+   - Contains \"regression\" or \"regressed\" → HIGH
+   - Contains \"urgent\", \"ASAP\", \"critical\", \"immediately\" → HIGH
    - Otherwise → MEDIUM (even if it looks important)
 
 EXTRACTING DETAILED, SPECIFIC ACTION ITEMS:
@@ -262,48 +256,53 @@ Include relevant details such as:
 - For deadlines: the date/time if specified
 
 BAD Examples (too vague):
-❌ "Investigate and resolve the fatal error on the UAT environment"
-❌ "Fix the database issue"
-❌ "Update the documentation"
-❌ "Review the pull request"
-❌ "Follow up with the client"
+❌ \"Investigate and resolve the fatal error on the UAT environment\"
+❌ \"Fix the database issue\"
+❌ \"Update the documentation\"
+❌ \"Review the pull request\"
+❌ \"Follow up with the client\"
 
 GOOD Examples (detailed and specific):
-✅ "Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings"
-✅ "Fix database connection timeout in production: MySQL pool exhausted during peak hours (12-2pm) affecting checkout flow"
-✅ "Update API documentation for /auth/login endpoint to include new 2FA flow and error codes 401/403"
-✅ "Review PR #847: Refactoring user authentication service - focus on session management changes"
-✅ "Follow up with Acme Corp client about delayed payment for Invoice #INV-2024-0523 ($15,000 overdue by 14 days)"
-
-Message:
-{$messageBody}
+✅ \"Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings\"
+✅ \"Fix database connection timeout in production: MySQL pool exhausted during peak hours (12-2pm) affecting checkout flow\"
+✅ \"Update API documentation for /auth/login endpoint to include new 2FA flow and error codes 401/403\"
+✅ \"Review PR #847: Refactoring user authentication service - focus on session management changes\"
+✅ \"Follow up with Acme Corp client about delayed payment for Invoice #INV-2024-0523 (\$15,000 overdue by 14 days)\"
 
 IMPORTANT: Return ONLY the JSON array, no explanations or extra text.
 
 Format (all fields required):
 [
   {
-    "action": "Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings",
-    "priority": "medium",
-    "sender": "Sentry",
-    "environment": "uat",
-    "reasoning": "Authentication error in UAT environment - defaulting to medium priority per UAT rules",
-    "confidence": 0.95,
-    "relevance_score": 0.95
+    \"action\": \"Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings\",
+    \"priority\": \"medium\",
+    \"sender\": \"Sentry\",
+    \"environment\": \"uat\",
+    \"reasoning\": \"Authentication error in UAT environment - defaulting to medium priority per UAT rules\",
+    \"confidence\": 0.95,
+    \"relevance_score\": 0.95
   }
 ]
 
 Field requirements:
 - action: DETAILED, SPECIFIC description with relevant context. Extract key details from the message that make the task clear and actionable. Someone reading just this description should understand what needs to be done.
-- priority: "low"/"medium"/"high" - Follow environment-specific rules (production=high, UAT=medium unless urgent/regression)
-- sender: Extract from "From:", signature, email, or system name (e.g., "Sentry", "Jira"). Use null if unclear.
-- environment: "production"/"uat"/"staging"/"development" or null if unclear. Critical for priority and deduplication rules.
+- priority: \"low\"/\"medium\"/\"high\" - Follow environment-specific rules (production=high, UAT=medium unless urgent/regression)
+- sender: Extract from \"From:\", signature, email, or system name (e.g., \"Sentry\", \"Jira\"). Use null if unclear.
+- environment: \"production\"/\"uat\"/\"staging\"/\"development\" or null if unclear. Critical for priority and deduplication rules.
 - reasoning: Explain WHY this is actionable and the priority assigned (1-2 sentences)
 - confidence: 0.0-1.0 (certainty this is a real, distinct action item)
 - relevance_score: 0.0-1.0 (how relevant to user's job responsibilities). Set to 1.0 if no job context provided.
 
 Return empty array [] if no actionable items exist.
-PROMPT;
+
+---
+
+NOW ANALYZE THIS MESSAGE:
+Source: {$source}
+
+{$messageBody}";
+
+        return $staticPrompt;
     }
 
     /**
