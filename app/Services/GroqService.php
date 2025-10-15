@@ -10,7 +10,7 @@ class GroqService
     private string $apiKey;
     private ?string $userJobContext;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    private string $model = 'openai/gpt-oss-20b'; // GPT-OSS 20B with prompt caching support
+    private string $model = 'openai/gpt-oss-120b'; // GPT-OSS 20B with prompt caching support
 
     public function __construct()
     {
@@ -23,8 +23,8 @@ class GroqService
      *
      * @param string $messageBody
      * @param string $source
-     * @return array Array of action items with priority, sender, reasoning, confidence, and relevance_score
-     *               Each item: ['action' => string, 'priority' => string, 'sender' => string|null,
+     * @return array Array of action items with priority, sender, environment, reasoning, confidence, and relevance_score
+     *               Each item: ['action' => string, 'priority' => string, 'sender' => string|null, 'environment' => string|null,
      *                           'reasoning' => string|null, 'confidence' => float|null, 'relevance_score' => float|null]
      */
     public function extractActionItems(string $messageBody, string $source): array
@@ -50,7 +50,7 @@ class GroqService
                 'messages' => [
                     [
                         'role' => 'system',
-                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. Each object must have: "action" (string), "priority" ("low"/"medium"/"high"), "sender" (name/email or null), "reasoning" (why this is actionable), "confidence" (0.0-1.0 how confident you are), "relevance_score" (0.0-1.0 how relevant to user\'s job). Example: [{"action":"Task","priority":"high","sender":"Name","reasoning":"Urgent deadline mentioned","confidence":0.95,"relevance_score":0.90}]'
+                        'content' => 'You are an AI assistant that extracts actionable tasks from messages. Return ONLY a valid JSON array, nothing else - no explanations, no markdown, no text before or after. Each object must have: "action" (string), "priority" ("low"/"medium"/"high"), "sender" (name/email or null), "environment" ("production"/"uat"/"staging"/"development" or null), "reasoning" (why this is actionable), "confidence" (0.0-1.0 how confident you are), "relevance_score" (0.0-1.0 how relevant to user\'s job). Example: [{"action":"Task","priority":"high","sender":"Name","environment":"production","reasoning":"Urgent deadline mentioned","confidence":0.95,"relevance_score":0.90}]'
                     ],
                     [
                         'role' => 'user',
@@ -197,10 +197,30 @@ Key indicators of NON-actionable content:
 - Has a marketing/promotional tone rather than direct work requests
 - Contains incentives like "account credit", "early access", or promotional offers
 
+Environment Detection:
+Extract the environment from the message (production, uat, staging, development, or null if unclear).
+Look for keywords like: "production", "prod", "live", "UAT", "user acceptance", "staging", "dev".
+For Sentry alerts, check the environment tag or URL.
+
 Priority levels:
-- HIGH: Urgent, critical, system failures, explicit deadlines, requests from superiors
-- MEDIUM: Normal priority, routine tasks, no immediate deadline
-- LOW: Optional, nice-to-have, informational, can be deferred
+- HIGH:
+  * Production issues (errors, outages, failures) - ALWAYS HIGH regardless of content
+  * Urgent requests with explicit deadlines
+  * Critical system failures
+  * Requests from superiors with urgency indicators
+- MEDIUM:
+  * UAT tasks (DEFAULT for UAT unless marked urgent or regression)
+  * Normal priority, routine tasks
+  * No immediate deadline
+- LOW:
+  * Optional, nice-to-have, informational, can be deferred
+
+SPECIAL RULES:
+1. PRODUCTION: Any production issue is automatically HIGH priority
+2. UAT: Default to MEDIUM unless:
+   - Contains "regression" or "regressed" → HIGH
+   - Contains "urgent", "ASAP", "critical", "immediately" → HIGH
+   - Otherwise → MEDIUM (even if it looks important)
 
 EXTRACTING DETAILED, SPECIFIC ACTION ITEMS:
 Action descriptions must be DETAILED and SPECIFIC with enough context to understand the task without reading the full message.
@@ -235,9 +255,10 @@ Format (all fields required):
 [
   {
     "action": "Fix Unauthenticated error in xwave-app UAT: minified:aua throwing 'Unauthorised: message: Unauthenticated' at ApiProvider.put in /admin/organisation_settings",
-    "priority": "high",
+    "priority": "medium",
     "sender": "Sentry",
-    "reasoning": "Fatal authentication error blocking UAT admin functionality",
+    "environment": "uat",
+    "reasoning": "Authentication error in UAT environment - defaulting to medium priority per UAT rules",
     "confidence": 0.95,
     "relevance_score": 0.95
   }
@@ -245,9 +266,10 @@ Format (all fields required):
 
 Field requirements:
 - action: DETAILED, SPECIFIC description with relevant context. Extract key details from the message that make the task clear and actionable. Someone reading just this description should understand what needs to be done.
-- priority: Based on urgency and impact (fatal errors, deadlines = high priority)
+- priority: "low"/"medium"/"high" - Follow environment-specific rules (production=high, UAT=medium unless urgent/regression)
 - sender: Extract from "From:", signature, email, or system name (e.g., "Sentry", "Jira"). Use null if unclear.
-- reasoning: Explain WHY this is actionable (1-2 sentences)
+- environment: "production"/"uat"/"staging"/"development" or null if unclear. Critical for priority and deduplication rules.
+- reasoning: Explain WHY this is actionable and the priority assigned (1-2 sentences)
 - confidence: 0.0-1.0 (certainty this is a real, distinct action item)
 - relevance_score: 0.0-1.0 (how relevant to user's job responsibilities). Set to 1.0 if no job context provided.
 
@@ -304,6 +326,7 @@ PROMPT;
                     $action = trim($item['action']);
                     $priority = strtolower($item['priority'] ?? 'medium');
                     $sender = isset($item['sender']) && !empty($item['sender']) ? trim($item['sender']) : null;
+                    $environment = isset($item['environment']) && !empty($item['environment']) ? strtolower(trim($item['environment'])) : null;
                     $reasoning = isset($item['reasoning']) && !empty($item['reasoning']) ? trim($item['reasoning']) : null;
                     $confidence = isset($item['confidence']) ? (float) $item['confidence'] : null;
                     $relevanceScore = isset($item['relevance_score']) ? (float) $item['relevance_score'] : null;
@@ -311,6 +334,11 @@ PROMPT;
                     // Validate priority
                     if (!in_array($priority, ['low', 'medium', 'high'])) {
                         $priority = 'medium';
+                    }
+
+                    // Validate environment
+                    if ($environment !== null && !in_array($environment, ['production', 'uat', 'staging', 'development'])) {
+                        $environment = null;
                     }
 
                     // Validate confidence (0.0 to 1.0)
@@ -328,6 +356,7 @@ PROMPT;
                             'action' => $action,
                             'priority' => $priority,
                             'sender' => $sender,
+                            'environment' => $environment,
                             'reasoning' => $reasoning,
                             'confidence' => $confidence,
                             'relevance_score' => $relevanceScore,
@@ -341,6 +370,7 @@ PROMPT;
                             'action' => $action,
                             'priority' => 'medium',
                             'sender' => null,
+                            'environment' => null,
                             'reasoning' => null,
                             'confidence' => null,
                             'relevance_score' => null,

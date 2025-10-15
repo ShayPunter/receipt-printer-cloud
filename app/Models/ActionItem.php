@@ -19,6 +19,7 @@ class ActionItem extends Model
         'action',
         'priority',
         'sender',
+        'environment',
         'synced',
         'synced_at',
     ];
@@ -87,6 +88,30 @@ class ActionItem extends Model
     public function scopeHighPriority($query)
     {
         return $query->where('priority', 'high');
+    }
+
+    /**
+     * Scope a query to filter by environment.
+     */
+    public function scopeByEnvironment($query, string $environment)
+    {
+        return $query->where('environment', $environment);
+    }
+
+    /**
+     * Scope a query to filter by production environment.
+     */
+    public function scopeProduction($query)
+    {
+        return $query->where('environment', 'production');
+    }
+
+    /**
+     * Check if this action item is from production environment.
+     */
+    public function isProduction(): bool
+    {
+        return $this->environment === 'production';
     }
 
     /**

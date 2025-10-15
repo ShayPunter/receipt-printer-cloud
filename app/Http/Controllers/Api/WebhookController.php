@@ -113,37 +113,50 @@ class WebhookController extends Controller
             $duplicateDetails = [];
 
             foreach ($actionItems as $item) {
-                // Check if this action item is a duplicate
-                $duplicationCheck = $this->deduplicationService->isDuplicate(
-                    $item['action'],
-                    $item['priority'],
-                    $item['sender'] ?? null
-                );
+                $environment = $item['environment'] ?? null;
+                $isProduction = $environment === 'production';
 
-                if ($duplicationCheck['is_duplicate']) {
-                    $duplicateCount++;
-                    $duplicateDetails[] = [
-                        'action' => $item['action'],
-                        'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
-                        'reasoning' => $duplicationCheck['reasoning']
-                    ];
+                // Skip deduplication check for production items - they ALWAYS print
+                if (!$isProduction) {
+                    // Check if this action item is a duplicate
+                    $duplicationCheck = $this->deduplicationService->isDuplicate(
+                        $item['action'],
+                        $item['priority'],
+                        $item['sender'] ?? null
+                    );
 
-                    Log::info('Duplicate action item detected, skipping', [
+                    if ($duplicationCheck['is_duplicate']) {
+                        $duplicateCount++;
+                        $duplicateDetails[] = [
+                            'action' => $item['action'],
+                            'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
+                            'reasoning' => $duplicationCheck['reasoning']
+                        ];
+
+                        Log::info('Duplicate action item detected, skipping', [
+                            'message_id' => $message->id,
+                            'action' => $item['action'],
+                            'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
+                            'reasoning' => $duplicationCheck['reasoning']
+                        ]);
+
+                        continue; // Skip creating this duplicate action item
+                    }
+                } else {
+                    Log::info('Production item bypassing deduplication', [
                         'message_id' => $message->id,
                         'action' => $item['action'],
-                        'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
-                        'reasoning' => $duplicationCheck['reasoning']
+                        'environment' => $environment
                     ]);
-
-                    continue; // Skip creating this duplicate action item
                 }
 
-                // Not a duplicate, create the action item
+                // Not a duplicate (or production item), create the action item
                 $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
                     'sender' => $item['sender'] ?? null,
+                    'environment' => $environment,
                     'synced' => false,
                 ]);
 
@@ -242,37 +255,50 @@ class WebhookController extends Controller
             $duplicateDetails = [];
 
             foreach ($actionItems as $item) {
-                // Check if this action item is a duplicate
-                $duplicationCheck = $this->deduplicationService->isDuplicate(
-                    $item['action'],
-                    $item['priority'],
-                    $item['sender'] ?? null
-                );
+                $environment = $item['environment'] ?? null;
+                $isProduction = $environment === 'production';
 
-                if ($duplicationCheck['is_duplicate']) {
-                    $duplicateCount++;
-                    $duplicateDetails[] = [
-                        'action' => $item['action'],
-                        'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
-                        'reasoning' => $duplicationCheck['reasoning']
-                    ];
+                // Skip deduplication check for production items - they ALWAYS print
+                if (!$isProduction) {
+                    // Check if this action item is a duplicate
+                    $duplicationCheck = $this->deduplicationService->isDuplicate(
+                        $item['action'],
+                        $item['priority'],
+                        $item['sender'] ?? null
+                    );
 
-                    Log::info('Duplicate action item detected, skipping', [
+                    if ($duplicationCheck['is_duplicate']) {
+                        $duplicateCount++;
+                        $duplicateDetails[] = [
+                            'action' => $item['action'],
+                            'duplicate_of' => $duplicationCheck['duplicate_of']?->action,
+                            'reasoning' => $duplicationCheck['reasoning']
+                        ];
+
+                        Log::info('Duplicate action item detected, skipping', [
+                            'message_id' => $message->id,
+                            'action' => $item['action'],
+                            'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
+                            'reasoning' => $duplicationCheck['reasoning']
+                        ]);
+
+                        continue; // Skip creating this duplicate action item
+                    }
+                } else {
+                    Log::info('Production item bypassing deduplication', [
                         'message_id' => $message->id,
                         'action' => $item['action'],
-                        'duplicate_of' => $duplicationCheck['duplicate_of']?->id,
-                        'reasoning' => $duplicationCheck['reasoning']
+                        'environment' => $environment
                     ]);
-
-                    continue; // Skip creating this duplicate action item
                 }
 
-                // Not a duplicate, create the action item
+                // Not a duplicate (or production item), create the action item
                 $actionItem = $message->actionItems()->create([
                     'source' => $message->source,
                     'action' => $item['action'],
                     'priority' => $item['priority'],
                     'sender' => $item['sender'] ?? null,
+                    'environment' => $environment,
                     'synced' => false,
                 ]);
 
@@ -383,15 +409,21 @@ class WebhookController extends Controller
                 $duplicateCount = 0;
 
                 foreach ($actionItems as $item) {
-                    $duplicationCheck = $this->deduplicationService->isDuplicate(
-                        $item['action'],
-                        $item['priority'],
-                        $item['sender'] ?? null
-                    );
+                    $environment = $item['environment'] ?? null;
+                    $isProduction = $environment === 'production';
 
-                    if ($duplicationCheck['is_duplicate']) {
-                        $duplicateCount++;
-                        continue;
+                    // Skip deduplication check for production items - they ALWAYS print
+                    if (!$isProduction) {
+                        $duplicationCheck = $this->deduplicationService->isDuplicate(
+                            $item['action'],
+                            $item['priority'],
+                            $item['sender'] ?? null
+                        );
+
+                        if ($duplicationCheck['is_duplicate']) {
+                            $duplicateCount++;
+                            continue;
+                        }
                     }
 
                     $actionItem = $message->actionItems()->create([
@@ -399,6 +431,7 @@ class WebhookController extends Controller
                         'action' => $item['action'],
                         'priority' => $item['priority'],
                         'sender' => $item['sender'] ?? null,
+                        'environment' => $environment,
                         'synced' => false,
                     ]);
 
