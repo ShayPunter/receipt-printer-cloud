@@ -10,7 +10,7 @@ class GroqService
     private string $apiKey;
     private ?string $userJobContext;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    private string $model = 'openai/gpt-oss-120b'; // GPT-OSS 20B with prompt caching support
+    private string $model = 'openai/gpt-oss-20b'; // GPT-OSS 20B with prompt caching support
 
     public function __construct()
     {

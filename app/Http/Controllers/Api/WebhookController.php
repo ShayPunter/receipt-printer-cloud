@@ -448,10 +448,16 @@ class WebhookController extends Controller
 
                 $message->update(['processed' => true]);
 
-                Log::info('Slack conversation processed immediately', [
+                Log::info('✓ SLACK CONVERSATION PROCESSED', [
                     'conversation_key' => $conversation->conversation_key,
+                    'channel' => $request->input('channel'),
+                    'thread_ts' => $request->input('thread_ts'),
                     'message_count' => count($conversation->messages),
+                    'full_conversation' => $message->body,
+                    'action_items_extracted' => count($actionItems),
                     'action_items_created' => $createdCount,
+                    'duplicates_skipped' => $duplicateCount,
+                    'processed_immediately' => true,
                 ]);
 
                 return response()->json([
@@ -468,9 +474,14 @@ class WebhookController extends Controller
             }
 
             // Message buffered, will be processed later
-            Log::info('Slack message buffered', [
+            Log::info('⏳ Slack message buffered (waiting for conversation to complete)', [
                 'conversation_key' => $conversation->conversation_key,
+                'channel' => $request->input('channel'),
+                'thread_ts' => $request->input('thread_ts') ?? 'no thread',
+                'sender' => $request->input('sender'),
+                'message_preview' => substr($request->input('body'), 0, 100),
                 'message_count' => count($conversation->messages),
+                'status' => 'Waiting for more messages or silence threshold',
             ]);
 
             return response()->json([

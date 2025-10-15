@@ -67,16 +67,24 @@ class ProcessSlackConversations extends Command
                 $duplicateCount = 0;
 
                 foreach ($actionItems as $item) {
-                    $duplicationCheck = $deduplicationService->isDuplicate(
-                        $item['action'],
-                        $item['priority'],
-                        $item['sender'] ?? null
-                    );
+                    $environment = $item['environment'] ?? null;
+                    $isProduction = $environment === 'production';
 
-                    if ($duplicationCheck['is_duplicate']) {
-                        $duplicateCount++;
-                        $this->line("    [SKIP] Duplicate: {$item['action']}");
-                        continue;
+                    // Skip deduplication check for production items - they ALWAYS print
+                    if (!$isProduction) {
+                        $duplicationCheck = $deduplicationService->isDuplicate(
+                            $item['action'],
+                            $item['priority'],
+                            $item['sender'] ?? null
+                        );
+
+                        if ($duplicationCheck['is_duplicate']) {
+                            $duplicateCount++;
+                            $this->line("    [SKIP] Duplicate: {$item['action']}");
+                            continue;
+                        }
+                    } else {
+                        $this->line("    [PRODUCTION] Bypassing deduplication");
                     }
 
                     $actionItem = $message->actionItems()->create([
@@ -84,18 +92,21 @@ class ProcessSlackConversations extends Command
                         'action' => $item['action'],
                         'priority' => $item['priority'],
                         'sender' => $item['sender'] ?? null,
+                        'environment' => $environment,
                         'synced' => false,
                     ]);
 
-                    if (isset($item['reasoning']) || isset($item['confidence'])) {
+                    if (isset($item['reasoning']) || isset($item['confidence']) || isset($item['relevance_score'])) {
                         $actionItem->metadata()->create([
                             'reasoning' => $item['reasoning'] ?? null,
                             'confidence' => $item['confidence'] ?? null,
+                            'relevance_score' => $item['relevance_score'] ?? null,
                         ]);
                     }
 
                     $createdCount++;
-                    $this->line("    [NEW] {$item['action']} (Priority: {$item['priority']})");
+                    $envLabel = $environment ? " [" . strtoupper($environment) . "]" : "";
+                    $this->line("    [NEW]{$envLabel} {$item['action']} (Priority: {$item['priority']})");
                 }
 
                 $message->update(['processed' => true]);
@@ -105,11 +116,17 @@ class ProcessSlackConversations extends Command
 
                 $this->line("  Created: {$createdCount}, Skipped: {$duplicateCount}");
 
-                Log::info('Slack conversation processed', [
+                Log::info('✓ SLACK CONVERSATION PROCESSED (Scheduled)', [
                     'conversation_key' => $conversation->conversation_key,
+                    'channel' => $conversation->channel,
+                    'thread_ts' => $conversation->thread_ts,
                     'message_count' => count($conversation->messages),
+                    'full_conversation' => $message->body,
+                    'action_items_extracted' => count($actionItems),
                     'action_items_created' => $createdCount,
                     'duplicates_skipped' => $duplicateCount,
+                    'processed_immediately' => false,
+                    'buffer_age_minutes' => $conversation->first_message_at->diffInMinutes(now()),
                 ]);
 
             } catch (\Exception $e) {
