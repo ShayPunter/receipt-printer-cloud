@@ -82,19 +82,18 @@ class GroqService
                 ]);
             }
 
-            // Log prompt caching metrics if available
-            if (isset($result['usage']['prompt_tokens_details']['cached_tokens'])) {
-                $totalPromptTokens = $result['usage']['prompt_tokens'] ?? 0;
-                $cachedTokens = $result['usage']['prompt_tokens_details']['cached_tokens'] ?? 0;
-                $cacheHitRate = $totalPromptTokens > 0 ? ($cachedTokens / $totalPromptTokens * 100) : 0;
+            // Log full usage stats to monitor caching
+            if (isset($result['usage'])) {
+                $usage = $result['usage'];
+                $promptTokens = $usage['prompt_tokens'] ?? 0;
+                $cachedTokens = $usage['prompt_tokens_details']['cached_tokens'] ?? 0;
+                $cacheHitRate = $promptTokens > 0 ? ($cachedTokens / $promptTokens * 100) : 0;
 
-                Log::info('Groq prompt caching stats', [
-                    'total_prompt_tokens' => $totalPromptTokens,
-                    'cached_tokens' => $cachedTokens,
-                    'cache_hit_rate' => round($cacheHitRate, 2) . '%',
+                Log::info('Groq API usage stats', [
                     'model' => $this->model,
-                    'completion_tokens' => $result['usage']['completion_tokens'] ?? 0,
                     'finish_reason' => $finishReason,
+                    'usage' => $usage, // Full usage object for debugging
+                    'cache_hit_rate' => $cachedTokens > 0 ? round($cacheHitRate, 2) . '%' : 'No cache',
                 ]);
             }
 
