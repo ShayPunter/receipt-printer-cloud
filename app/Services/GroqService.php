@@ -9,6 +9,7 @@ class GroqService
 {
     private string $apiKey;
     private ?string $userJobContext;
+    private ?string $userName;
     private string $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     private string $model = 'openai/gpt-oss-20b'; // GPT-OSS 20B with prompt caching support
 
@@ -16,6 +17,7 @@ class GroqService
     {
         $this->apiKey = config('services.groq.api_key');
         $this->userJobContext = config('services.groq.user_job_context');
+        $this->userName = config('services.groq.user_name');
     }
 
     /**
@@ -132,6 +134,32 @@ class GroqService
      */
     private function buildPrompt(string $messageBody, string $source): string
     {
+        $userContextSection = '';
+
+        if ($this->userName) {
+            $userContextSection = "
+
+USER IDENTITY:
+The recipient of these action items is: {$this->userName}
+
+CRITICAL: Messages FROM {$this->userName} are CONTEXT, not action items for them:
+- If {$this->userName} says \"we need to fix X\" or \"can someone do Y\" → DO NOT extract as action for them
+- These are instructions they're giving to others, use them as CONTEXT ONLY
+- Only extract items when someone is asking {$this->userName} to do something
+- Only extract items when {$this->userName} is explicitly the target/recipient
+
+Examples:
+❌ WRONG - Don't extract:
+  \"Shay Punter: Can you look into this bug?\" (Shay is asking someone else)
+  \"Shay Punter: We need to deploy to UAT\" (Shay is directing the team)
+
+✅ CORRECT - Do extract:
+  \"Alice: Shay, can you review this PR?\" (Someone asking Shay)
+  \"Bob: @Shay Punter please fix the auth issue\" (Directed at Shay)
+  \"System: Assigned to Shay Punter\" (Task assigned to Shay)
+";
+        }
+
         $relevanceSection = '';
 
         if ($this->userJobContext) {
@@ -158,6 +186,7 @@ Consider:
 
         return <<<PROMPT
 Analyze the following message from {$source} and extract actionable items.
+{$userContextSection}
 {$relevanceSection}
 
 CRITICAL RULES:
