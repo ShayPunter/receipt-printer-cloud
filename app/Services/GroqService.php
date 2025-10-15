@@ -58,7 +58,7 @@ class GroqService
                     ]
                 ],
                 'temperature' => 0.3,
-                'max_tokens' => 1000,
+                'max_tokens' => 2048, // Increased to handle detailed action items with all metadata
             ]);
 
             if (!$response->successful()) {
@@ -71,6 +71,16 @@ class GroqService
 
             $result = $response->json();
             $content = $result['choices'][0]['message']['content'] ?? '';
+            $finishReason = $result['choices'][0]['finish_reason'] ?? 'unknown';
+
+            // Check if response was truncated
+            if ($finishReason === 'length') {
+                Log::warning('Groq response truncated - hitting max_tokens limit', [
+                    'max_tokens' => 2048,
+                    'model' => $this->model,
+                    'content_preview' => substr($content, -200) // Last 200 chars to see where it cut off
+                ]);
+            }
 
             // Log prompt caching metrics if available
             if (isset($result['usage']['prompt_tokens_details']['cached_tokens'])) {
@@ -83,6 +93,8 @@ class GroqService
                     'cached_tokens' => $cachedTokens,
                     'cache_hit_rate' => round($cacheHitRate, 2) . '%',
                     'model' => $this->model,
+                    'completion_tokens' => $result['usage']['completion_tokens'] ?? 0,
+                    'finish_reason' => $finishReason,
                 ]);
             }
 
@@ -261,6 +273,20 @@ PROMPT;
         // Look for array pattern [ ... ] and extract it
         if (preg_match('/\[(?:[^[\]]|(?R))*\]/s', $content, $matches)) {
             $content = $matches[0];
+        } else {
+            // If no complete array found, try to salvage by completing it
+            if (strpos($content, '[') !== false && strpos($content, ']') === false) {
+                Log::warning('Incomplete JSON array detected, attempting to salvage', [
+                    'content_length' => strlen($content),
+                    'last_100_chars' => substr($content, -100)
+                ]);
+                // Try to close the array by finding the last complete object
+                $lastCloseBrace = strrpos($content, '}');
+                if ($lastCloseBrace !== false) {
+                    $content = substr($content, 0, $lastCloseBrace + 1) . ']';
+                    Log::info('Salvaged incomplete JSON by closing array after last complete object');
+                }
+            }
         }
 
         try {
