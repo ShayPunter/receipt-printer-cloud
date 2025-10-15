@@ -33,6 +33,9 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+        // Conversation buffering settings
+        'buffer_time' => env('SLACK_BUFFER_TIME', 5), // Minutes to wait before processing
+        'silence_threshold' => env('SLACK_SILENCE_THRESHOLD', 3), // Minutes of silence to trigger early processing
     ],
 
     'groq' => [

@@ -32,6 +32,9 @@ Route::prefix('webhook')->group(function () {
 
     // Store and process immediately in one call
     Route::post('/process-immediately', [WebhookController::class, 'storeAndProcess']);
+
+    // Slack-specific webhook with conversation buffering
+    Route::post('/slack', [WebhookController::class, 'slack']);
 });
 
 // Sync endpoints

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Services\GroqService;
 use App\Services\DeduplicationService;
+use App\Services\SlackConversationBuffer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,8 @@ class WebhookController extends Controller
 {
     public function __construct(
         private GroqService $groqService,
-        private DeduplicationService $deduplicationService
+        private DeduplicationService $deduplicationService,
+        private SlackConversationBuffer $slackBuffer
     ) {}
 
     /**
@@ -317,6 +319,143 @@ class WebhookController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process webhook'
+            ], 500);
+        }
+    }
+
+    /**
+     * Receive Slack message and add to conversation buffer.
+     *
+     * POST /api/webhook/slack
+     * Body: {
+     *   "channel": "C1234567",
+     *   "thread_ts": "1234567890.123456" (optional),
+     *   "body": "Message content",
+     *   "sender": "User Name",
+     *   "timestamp": "2025-01-13T10:30:00Z" (optional)
+     * }
+     */
+    public function slack(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'channel' => 'required|string|max:255',
+            'thread_ts' => 'nullable|string|max:255',
+            'body' => 'required|string',
+            'sender' => 'required|string|max:255',
+            'timestamp' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            // Add message to conversation buffer
+            $conversation = $this->slackBuffer->addMessage(
+                $request->input('channel'),
+                $request->input('thread_ts'),
+                $request->input('body'),
+                $request->input('sender'),
+                $request->input('timestamp')
+            );
+
+            // Check if conversation should be processed immediately
+            $shouldProcessNow = $this->slackBuffer->shouldProcessImmediately($conversation);
+
+            if ($shouldProcessNow) {
+                // Process conversation immediately
+                $message = $this->slackBuffer->markAsProcessed($conversation);
+
+                // Extract action items
+                $actionItems = $this->groqService->extractActionItems(
+                    $message->body,
+                    'slack'
+                );
+
+                // Store action items with deduplication
+                $createdCount = 0;
+                $duplicateCount = 0;
+
+                foreach ($actionItems as $item) {
+                    $duplicationCheck = $this->deduplicationService->isDuplicate(
+                        $item['action'],
+                        $item['priority'],
+                        $item['sender'] ?? null
+                    );
+
+                    if ($duplicationCheck['is_duplicate']) {
+                        $duplicateCount++;
+                        continue;
+                    }
+
+                    $actionItem = $message->actionItems()->create([
+                        'source' => 'slack',
+                        'action' => $item['action'],
+                        'priority' => $item['priority'],
+                        'sender' => $item['sender'] ?? null,
+                        'synced' => false,
+                    ]);
+
+                    if (isset($item['reasoning']) || isset($item['confidence'])) {
+                        $actionItem->metadata()->create([
+                            'reasoning' => $item['reasoning'] ?? null,
+                            'confidence' => $item['confidence'] ?? null,
+                        ]);
+                    }
+
+                    $createdCount++;
+                }
+
+                $message->update(['processed' => true]);
+
+                Log::info('Slack conversation processed immediately', [
+                    'conversation_key' => $conversation->conversation_key,
+                    'message_count' => count($conversation->messages),
+                    'action_items_created' => $createdCount,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Slack message buffered and processed immediately',
+                    'data' => [
+                        'conversation_key' => $conversation->conversation_key,
+                        'message_count' => count($conversation->messages),
+                        'processed_immediately' => true,
+                        'action_items_created' => $createdCount,
+                        'duplicates_skipped' => $duplicateCount,
+                    ]
+                ], 201);
+            }
+
+            // Message buffered, will be processed later
+            Log::info('Slack message buffered', [
+                'conversation_key' => $conversation->conversation_key,
+                'message_count' => count($conversation->messages),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Slack message buffered successfully',
+                'data' => [
+                    'conversation_key' => $conversation->conversation_key,
+                    'message_count' => count($conversation->messages),
+                    'processed_immediately' => false,
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to process Slack webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to process Slack webhook'
             ], 500);
         }
     }
