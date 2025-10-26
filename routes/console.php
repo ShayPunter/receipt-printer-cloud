@@ -13,3 +13,9 @@ Schedule::command('slack:process-conversations')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Process recurring tasks every minute to check for due tasks
+Schedule::command('recurring-tasks:process')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
